@@ -1,1 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Video and Navigation Tracker</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBLs1ddAi9HSJ8zNFCxcDAp7b4srlSgyjA&libraries=places"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+
+        header {
+            background-color: #0077cc;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 10px;
+            text-align: center;
+            flex: 1;
+            max-width: 400px;
+            min-width: 300px;
+        }
+
+        .map-container {
+            width: 100%;
+            padding: 20px;
+        }
+
+        #map {
+            height: 700px;
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        input {
+            width: 90%;
+            padding: 10px;
+            margin: 5px 0 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        button {
+            background-color: #0077cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #005fa3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #0077cc;
+            color: white;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Live Video and Navigation Tracker</h1>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>Live Video Feed</h2>
+            <img src="/video_feed" alt="Live Video Feed" style="width: 100%; border-radius: 10px;">
+        </div>
+
+        <div class="card">
+            <h2>Route Finder</h2>
+            <label for="source">Source:</label>
+            <input type="text" id="source" placeholder="Enter source address">
+            <label for="destination">Destination:</label>
+            <input type="text" id="destination" placeholder="Enter destination address">
+            <button id="findRoute">Find Route</button>
+            <button id="startJourney" disabled>Start Journey</button>
+        </div>
+
+        <div class="card">
+            <h2>Find Latitude and Longitude</h2>
+            <label for="place">Place Name:</label>
+            <input type="text" id="place" placeholder="Enter place name">
+            <button id="findCoordinates">Find Coordinates</button>
+            <div id="coordinatesResult"></div>
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <footer>
+        &copy; Garuda Vega Smart India Hackathon 2024
+    </footer>
+
+    <script>
+        let map;
+        let directionsService;
+        let directionsRenderer;
+        let routeSteps = [];
+        let currentStepIndex = 0;
+        let journeyInterval;
+
+        function initMap() {
+            // Initialize Google Maps
+            map = new google.maps.Map(document.getElementById("map"), {
+                center: { lat: 0, lng: 0 },
+                zoom: 2,
+            });
+
+            // Initialize Directions Service and Renderer
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            directionsRenderer.setMap(map);
+        }
+
+        async function findRoute() {
+            const source = document.getElementById("source").value.trim();
+            const destination = document.getElementById("destination").value.trim();
+
+            if (!source || !destination) {
+                alert("Please enter both source and destination addresses.");
+                return;
+            }
+
+            // Request route
+            directionsService.route(
+                {
+                    origin: source,
+                    destination: destination,
+                    travelMode: google.maps.TravelMode.DRIVING,
+                },
+                (result, status) => {
+                    if (status === google.maps.DirectionsStatus.OK) {
+                        directionsRenderer.setDirections(result);
+
+                        const route = result.routes[0];
+                        routeSteps = route.legs[0].steps;
+                        document.getElementById("startJourney").disabled = false;
+
+                        const distance = route.legs[0].distance.text;
+                        const duration = route.legs[0].duration.text;
+
+                        alert(`Total Distance: ${distance}\nEstimated Time: ${duration}`);
+                    } else {
+                        alert("Could not find a route. Please check your inputs.");
+                    }
+                }
+            );
+        }
+
+        function startJourney() {
+            if (!routeSteps || routeSteps.length === 0) {
+                alert("No route found to start the journey.");
+                return;
+            }
+
+            currentStepIndex = 0;
+
+            journeyInterval = setInterval(() => {
+                if (currentStepIndex < routeSteps.length) {
+                    const step = routeSteps[currentStepIndex];
+                    map.panTo(step.start_location);
+                    map.setZoom(15);
+
+                    const marker = new google.maps.Marker({
+                        position: step.start_location,
+                        map: map,
+                        title: `Step ${currentStepIndex + 1}`,
+                    });
+
+                    currentStepIndex++;
+                } else {
+                    clearInterval(journeyInterval);
+                    alert("Journey completed!");
+                }
+            }, 2000); // Navigate to the next step every 2 seconds
+        }
+
+        async function findCoordinates() {
+            const place = document.getElementById("place").value.trim();
+            const resultDiv = document.getElementById("coordinatesResult");
+
+            if (!place) {
+                resultDiv.innerHTML = "<p>Please enter a place name.</p>";
+                return;
+            }
+
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ address: place }, (results, status) => {
+                if (status === google.maps.GeocoderStatus.OK && results[0]) {
+                    const location = results[0].geometry.location;
+                    resultDiv.innerHTML = `<p>Latitude: ${location.lat()}</p><p>Longitude: ${location.lng()}</p>`;
+                } else {
+                    resultDiv.innerHTML = "<p>Place not found. Please try again.</p>";
+                }
+            });
+        }
+
+        document.getElementById("findRoute").addEventListener("click", findRoute);
+        document.getElementById("startJourney").addEventListener("click", startJourney);
+        document.getElementById("findCoordinates").addEventListener("click", findCoordinates);
+
+        // Initialize the map
+        window.onload = initMap;
+    </script>
+</body>
+</html>
 
